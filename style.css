@@ -1,0 +1,232 @@
+/* ── Reset & base ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  display: flex;
+  overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+#sidebar {
+  width: 300px;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: #1e2a3a;
+  color: #e8edf2;
+  overflow-y: auto;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+#sidebar-header {
+  background: #142032;
+  padding: 20px;
+  border-bottom: 2px solid #2e4060;
+  flex-shrink: 0;
+}
+
+#sidebar-header h1 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  font-size: 0.82rem;
+  color: #7a9ab8;
+}
+
+/* ── Generic section ──────────────────────────────────────────────────── */
+.section {
+  padding: 16px 20px;
+  border-bottom: 1px solid #283848;
+}
+
+.section-label {
+  display: block;
+  font-size: 0.78rem;
+  color: #7a9ab8;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 10px;
+}
+
+/* ── Party select ─────────────────────────────────────────────────────── */
+.select-wrapper {
+  position: relative;
+}
+
+.select-wrapper::after {
+  content: '▾';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #7a9ab8;
+  pointer-events: none;
+  font-size: 0.9rem;
+}
+
+#party-select {
+  width: 100%;
+  padding: 10px 34px 10px 12px;
+  background: #253547;
+  color: #e8edf2;
+  border: 1px solid #3a5070;
+  border-radius: 6px;
+  font-size: 0.92rem;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+#party-select:focus {
+  border-color: #5a90c0;
+  box-shadow: 0 0 0 2px rgba(90, 144, 192, 0.3);
+}
+
+/* ── Legend ───────────────────────────────────────────────────────────── */
+#legend-gradient {
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #3a5070;
+  margin-bottom: 6px;
+  background: linear-gradient(to right, #ffffff, #aaaaaa);
+}
+
+#legend-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #7a9ab8;
+}
+
+/* ── Info box ─────────────────────────────────────────────────────────── */
+.hint {
+  font-size: 0.82rem;
+  color: #7a9ab8;
+  line-height: 1.6;
+}
+
+#info-box h3 {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 10px;
+}
+
+#info-box .party-highlight {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#info-box table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 6px;
+  font-size: 0.82rem;
+}
+
+#info-box tr {
+  border-bottom: 1px solid #283848;
+}
+
+#info-box tr.selected-party {
+  background: rgba(90, 144, 192, 0.2);
+}
+
+#info-box tr.selected-party td {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+#info-box td {
+  padding: 4px 6px;
+  color: #b8cfe0;
+}
+
+#info-box td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.color-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Error ────────────────────────────────────────────────────────────── */
+.error-section p {
+  font-size: 0.82rem;
+  color: #ff8080;
+  line-height: 1.5;
+}
+
+/* ── Credits ──────────────────────────────────────────────────────────── */
+.credits {
+  margin-top: auto;
+}
+
+.credits p {
+  font-size: 0.72rem;
+  color: #4a6880;
+  line-height: 1.7;
+}
+
+.credits a {
+  color: #5a90c0;
+  text-decoration: none;
+}
+
+.credits a:hover {
+  text-decoration: underline;
+}
+
+/* ── Map ──────────────────────────────────────────────────────────────── */
+#map-container {
+  flex: 1;
+  position: relative;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  body {
+    flex-direction: column;
+  }
+
+  #sidebar {
+    width: 100%;
+    min-width: 100%;
+    max-height: 40vh;
+  }
+
+  #map-container {
+    flex: 1;
+    min-height: 0;
+  }
+}
