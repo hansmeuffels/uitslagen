@@ -1,5 +1,7 @@
 'use strict';
 
+import { datasets } from './data/datasets.js';
+
 // ── Configuration ──────────────────────────────────────────────────────────
 
 const TILBURG_CENTER = [51.5655, 5.0913];
@@ -7,33 +9,17 @@ const TILBURG_ZOOM   = 12;
 
 /**
  * PC4 postal codes that belong to the municipality of Tilburg (incl. Udenhout,
- * Berkel-Enschot).  Used to filter the PDOK WFS response.
+ * Berkel-Enschot, Biezenmortel).  Used to filter the PDOK WFS response.
  */
 const TILBURG_POSTCODES = [
   '5011','5012','5013','5014','5015','5016','5017','5018','5019',
   '5021','5022','5023','5024','5025','5026','5027','5028',
   '5031','5032','5033','5034','5035','5036','5037','5038',
   '5041','5042','5043','5044','5045','5046','5047','5048','5049',
+  '5056','5057','5071','5074',
 ];
 
-/** Official / widely-recognised party colours (hex). */
-const PARTY_COLORS = {
-  'VVD':          '#003082',
-  'D66':          '#1DB954',
-  'PVV':          '#003580',
-  'CDA':          '#007B5E',
-  'SP':           '#EE0000',
-  'GL-PvdA':      '#C8142A',
-  'ChristenUnie': '#4C9BE8',
-  'PvdD':         '#218B3B',
-  'NSC':          '#264FA2',
-  'BBB':          '#8FB83B',
-  'DENK':         '#1AB3A6',
-  'Volt':         '#502379',
-  'Overig':       '#888888',
-};
-
-/** Human-readable neighbourhood names per PC4. */
+/** Human-readable neighbourhood names per PC4 (fallback for TK2023 dataset). */
 const NEIGHBORHOOD_NAMES = {
   '5011': 'Centrum',
   '5012': 'Binnenstad Oost',
@@ -69,14 +55,25 @@ const NEIGHBORHOOD_NAMES = {
   '5047': 'Tilburg',
   '5048': 'Tilburg',
   '5049': 'Tilburg',
+  '5056': 'Berkel-Enschot',
+  '5057': 'Berkel-Enschot',
+  '5071': 'Udenhout',
+  '5074': 'Biezenmortel',
 };
 
 // ── State ───────────────────────────────────────────────────────────────────
 
 let map;
 let geojsonLayer;
-let votingData   = {};   // { postcode: { VVD: 11, D66: 9, … } }
-let selectedParty = null;
+let votingData         = {};   // { postcode: { party: value, … } }
+let selectedParty      = null;
+let selectedDatasetIdx = 0;
+
+// ── Helpers for current dataset ─────────────────────────────────────────────
+
+function currentDataset()    { return datasets[selectedDatasetIdx]; }
+function currentPartyColors(){ return currentDataset().partyColors; }
+function currentValueLabel() { return currentDataset().valueLabel; }
 
 // ── Map initialisation ──────────────────────────────────────────────────────
 
@@ -89,25 +86,14 @@ function initMap() {
   }).addTo(map);
 }
 
-// ── CSV loading ─────────────────────────────────────────────────────────────
+// ── Dataset loading ─────────────────────────────────────────────────────────
 
-function loadCSVData() {
-  return new Promise((resolve, reject) => {
-    Papa.parse('data/verkiezingen_tilburg.csv', {
-      download:      true,
-      header:        true,
-      dynamicTyping: true,
-      skipEmptyLines: true,
-      complete(results) {
-        results.data.forEach(row => {
-          if (row.postcode) {
-            votingData[String(row.postcode)] = row;
-          }
-        });
-        resolve(votingData);
-      },
-      error: reject,
-    });
+function loadDatasetData() {
+  votingData = {};
+  currentDataset().data.forEach(row => {
+    if (row.postcode) {
+      votingData[String(row.postcode)] = row;
+    }
   });
 }
 
@@ -164,16 +150,16 @@ function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** Blend white → partyColor proportionally to percentage / maxValue. */
-function getColor(percentage, partyHex) {
-  if (percentage === null || percentage === undefined) return '#cccccc';
+/** Blend white → partyColor proportionally to value / maxValue. */
+function getColor(value, partyHex) {
+  if (value === null || value === undefined) return '#cccccc';
 
   const values = Object.values(votingData)
     .map(d => d[selectedParty])
     .filter(v => typeof v === 'number');
   const maxVal = values.length > 0 ? Math.max(...values) : 40;
 
-  const factor = Math.min(percentage / maxVal, 1);
+  const factor = Math.min(value / maxVal, 1);
   const [pr, pg, pb] = hexToRgb(partyHex);
 
   return rgbToHex(
@@ -190,6 +176,12 @@ function getPostcode(feature) {
   return String(p.postcode4naam ?? p.pc4 ?? p.PC4 ?? p.postcode ?? '');
 }
 
+function getNeighborhood(postcode) {
+  return (votingData[postcode] && votingData[postcode].wijk)
+    ? votingData[postcode].wijk
+    : (NEIGHBORHOOD_NAMES[postcode] ?? '');
+}
+
 // ── Leaflet style / interaction ─────────────────────────────────────────────
 
 function styleFeature(feature) {
@@ -197,13 +189,14 @@ function styleFeature(feature) {
     return { fillColor: '#b0bec5', weight: 1, color: '#607d8b', fillOpacity: 0.4 };
   }
 
-  const pc   = getPostcode(feature);
-  const data = votingData[pc];
-  const pct  = data ? data[selectedParty] : null;
-  const col  = PARTY_COLORS[selectedParty] ?? '#888888';
+  const pc          = getPostcode(feature);
+  const data        = votingData[pc];
+  const val         = data ? data[selectedParty] : null;
+  const partyColors = currentPartyColors();
+  const col         = partyColors[selectedParty] ?? '#888888';
 
   return {
-    fillColor: getColor(pct, col),
+    fillColor: getColor(val, col),
     weight:       1,
     color:        '#607d8b',
     fillOpacity:  0.85,
@@ -211,11 +204,12 @@ function styleFeature(feature) {
 }
 
 function buildTooltip(postcode) {
-  const data = votingData[postcode];
-  const hood = NEIGHBORHOOD_NAMES[postcode] ?? '';
+  const data  = votingData[postcode];
+  const hood  = getNeighborhood(postcode);
+  const label = currentValueLabel();
   let html = `<strong>${postcode}</strong>${hood ? ` – ${hood}` : ''}`;
   if (data && selectedParty && data[selectedParty] !== undefined) {
-    html += `<br>${selectedParty}: <strong>${data[selectedParty]} %</strong>`;
+    html += `<br>${selectedParty}: <strong>${data[selectedParty]} ${label}</strong>`;
   }
   return html;
 }
@@ -244,9 +238,11 @@ function onEachFeature(feature, layer) {
 // ── Sidebar content ─────────────────────────────────────────────────────────
 
 function showInfoBox(postcode) {
-  const box  = document.getElementById('info-box');
-  const data = votingData[postcode];
-  const hood = NEIGHBORHOOD_NAMES[postcode] ?? '';
+  const box         = document.getElementById('info-box');
+  const data        = votingData[postcode];
+  const hood        = getNeighborhood(postcode);
+  const partyColors = currentPartyColors();
+  const label       = currentValueLabel();
 
   let html = `<h3>${postcode}${hood ? ` – ${hood}` : ''}</h3>`;
 
@@ -257,21 +253,21 @@ function showInfoBox(postcode) {
   }
 
   if (selectedParty && data[selectedParty] !== undefined) {
-    const col = PARTY_COLORS[selectedParty] ?? '#888888';
+    const col = partyColors[selectedParty] ?? '#888888';
     html += `<div class="party-highlight">
       <span class="color-dot" style="background:${col}"></span>
-      ${selectedParty}: ${data[selectedParty]} %
+      ${selectedParty}: ${data[selectedParty]} ${label}
     </div>`;
   }
 
   html += '<table>';
-  for (const [party, col] of Object.entries(PARTY_COLORS)) {
+  for (const [party, col] of Object.entries(partyColors)) {
     if (data[party] === undefined) continue;
     const sel = party === selectedParty ? ' class="selected-party"' : '';
     html += `<tr${sel}>
       <td><span class="color-dot" style="background:${col}"></span></td>
       <td>${party}</td>
-      <td>${data[party]} %</td>
+      <td>${data[party]} ${label}</td>
     </tr>`;
   }
   html += '</table>';
@@ -312,7 +308,9 @@ function updateLegend() {
   }
   section.hidden = false;
 
-  const col = PARTY_COLORS[selectedParty] ?? '#888888';
+  const partyColors = currentPartyColors();
+  const label       = currentValueLabel();
+  const col = partyColors[selectedParty] ?? '#888888';
   document.getElementById('legend-gradient').style.background =
     `linear-gradient(to right, #ffffff, ${col})`;
 
@@ -320,35 +318,66 @@ function updateLegend() {
     .map(d => d[selectedParty])
     .filter(v => typeof v === 'number');
   const max = values.length > 0 ? Math.max(...values) : 0;
-  document.getElementById('legend-max').textContent = `${max} %`;
+  document.getElementById('legend-min').textContent = `0 ${label}`;
+  document.getElementById('legend-max').textContent = `${max} ${label}`;
+}
+
+// ── Dataset select ──────────────────────────────────────────────────────────
+
+function populateDatasetSelect() {
+  const select = document.getElementById('dataset-select');
+
+  datasets.forEach((ds, i) => {
+    const opt = document.createElement('option');
+    opt.value       = i;
+    opt.textContent = ds.title;
+    select.appendChild(opt);
+  });
+
+  select.addEventListener('change', e => {
+    selectedDatasetIdx = Number(e.target.value);
+    selectedParty = null;
+
+    loadDatasetData();
+
+    // Reset and repopulate party selector
+    const partySelect = document.getElementById('party-select');
+    partySelect.innerHTML = '<option value="">— selecteer een partij —</option>';
+    populatePartySelect();
+
+    updateMapColors();
+  });
 }
 
 // ── Party select ────────────────────────────────────────────────────────────
 
 function populatePartySelect() {
-  const select = document.getElementById('party-select');
+  const select      = document.getElementById('party-select');
+  const partyColors = currentPartyColors();
 
-  for (const party of Object.keys(PARTY_COLORS)) {
+  for (const party of Object.keys(partyColors)) {
     const opt = document.createElement('option');
     opt.value       = party;
     opt.textContent = party;
     select.appendChild(opt);
   }
-
-  select.addEventListener('change', e => {
-    selectedParty = e.target.value || null;
-    updateMapColors();
-  });
 }
 
 // ── Bootstrap ───────────────────────────────────────────────────────────────
 
 async function init() {
   initMap();
+  loadDatasetData();
+  populateDatasetSelect();
   populatePartySelect();
 
+  document.getElementById('party-select').addEventListener('change', e => {
+    selectedParty = e.target.value || null;
+    updateMapColors();
+  });
+
   try {
-    const [, geojson] = await Promise.all([loadCSVData(), fetchGeoJSON()]);
+    const geojson = await fetchGeoJSON();
 
     geojsonLayer = L.geoJSON(geojson, {
       style:          styleFeature,
