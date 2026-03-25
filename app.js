@@ -128,7 +128,7 @@ async function fetchGeoJSON() {
     // PDOK unreachable – fall through to the bundled fallback
   }
 
-  // 2. Bundled approximate geometries (hexagonal tiles per PC4 centroid).
+  // 2. Bundled real PC4 boundaries (sourced from georef-netherlands-postcode-pc4).
   const fallback = await fetch('data/tilburg_pc4_fallback.geojson');
   if (!fallback.ok) {
     throw new Error('Kon geen postcodegebieden laden (PDOK niet bereikbaar en fallback ontbreekt).');
