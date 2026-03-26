@@ -150,12 +150,12 @@ function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** Blend white → partyColor proportionally to value / maxValue. */
+/** Blend white → partyColor proportionally to percentage / maxPercentage. */
 function getColor(value, partyHex) {
   if (value === null || value === undefined) return '#cccccc';
 
   const values = Object.values(votingData)
-    .map(d => d[selectedParty])
+    .map(d => getPercentage(d, selectedParty))
     .filter(v => typeof v === 'number');
   const maxVal = values.length > 0 ? Math.max(...values) : 40;
 
@@ -167,6 +167,26 @@ function getColor(value, partyHex) {
     Math.round(255 + (pg - 255) * factor),
     Math.round(255 + (pb - 255) * factor),
   );
+}
+
+// ── Value helpers (percentage primary, votes secondary) ────────────────────
+
+/** Return the percentage for a party in a data row, regardless of dataset type. */
+function getPercentage(data, party) {
+  if (!data || data[party] === undefined) return null;
+  if (currentValueLabel() === '%') return data[party];
+  return data.totaal_stemmen
+    ? +(data[party] / data.totaal_stemmen * 100).toFixed(1)
+    : null;
+}
+
+/** Return the absolute vote count for a party in a data row. */
+function getVoteCount(data, party) {
+  if (!data || data[party] === undefined) return null;
+  if (currentValueLabel() !== '%') return data[party];
+  return data.totaal_stemmen
+    ? Math.round(data[party] * data.totaal_stemmen / 100)
+    : null;
 }
 
 // ── Feature helpers ─────────────────────────────────────────────────────────
@@ -191,7 +211,7 @@ function styleFeature(feature) {
 
   const pc          = getPostcode(feature);
   const data        = votingData[pc];
-  const val         = data ? data[selectedParty] : null;
+  const val         = data ? getPercentage(data, selectedParty) : null;
   const partyColors = currentPartyColors();
   const col         = partyColors[selectedParty] ?? '#888888';
 
@@ -206,10 +226,12 @@ function styleFeature(feature) {
 function buildTooltip(postcode) {
   const data  = votingData[postcode];
   const hood  = getNeighborhood(postcode);
-  const label = currentValueLabel();
   let html = `<strong>${postcode}</strong>${hood ? ` – ${hood}` : ''}`;
   if (data && selectedParty && data[selectedParty] !== undefined) {
-    html += `<br>${selectedParty}: <strong>${data[selectedParty]} ${label}</strong>`;
+    const pct   = getPercentage(data, selectedParty);
+    const votes = getVoteCount(data, selectedParty);
+    html += `<br>${selectedParty}: <strong>${pct}%</strong>`;
+    if (votes !== null) html += ` <span style="opacity:.7">(${votes} stemmen)</span>`;
   }
   return html;
 }
@@ -242,7 +264,6 @@ function showInfoBox(postcode) {
   const data        = votingData[postcode];
   const hood        = getNeighborhood(postcode);
   const partyColors = currentPartyColors();
-  const label       = currentValueLabel();
 
   let html = `<h3>${postcode}${hood ? ` – ${hood}` : ''}</h3>`;
 
@@ -253,21 +274,26 @@ function showInfoBox(postcode) {
   }
 
   if (selectedParty && data[selectedParty] !== undefined) {
-    const col = partyColors[selectedParty] ?? '#888888';
+    const col   = partyColors[selectedParty] ?? '#888888';
+    const pct   = getPercentage(data, selectedParty);
+    const votes = getVoteCount(data, selectedParty);
     html += `<div class="party-highlight">
       <span class="color-dot" style="background:${col}"></span>
-      ${selectedParty}: ${data[selectedParty]} ${label}
+      ${selectedParty}: ${pct}%${votes !== null ? ` (${votes} stemmen)` : ''}
     </div>`;
   }
 
   html += '<table>';
   for (const [party, col] of Object.entries(partyColors)) {
     if (data[party] === undefined) continue;
+    const pct   = getPercentage(data, party);
+    const votes = getVoteCount(data, party);
     const sel = party === selectedParty ? ' class="selected-party"' : '';
     html += `<tr${sel}>
       <td><span class="color-dot" style="background:${col}"></span></td>
       <td>${party}</td>
-      <td>${data[party]} ${label}</td>
+      <td>${pct}%</td>
+      <td class="votes-cell">${votes !== null ? `(${votes})` : ''}</td>
     </tr>`;
   }
   html += '</table>';
@@ -309,17 +335,16 @@ function updateLegend() {
   section.hidden = false;
 
   const partyColors = currentPartyColors();
-  const label       = currentValueLabel();
   const col = partyColors[selectedParty] ?? '#888888';
   document.getElementById('legend-gradient').style.background =
     `linear-gradient(to right, #ffffff, ${col})`;
 
   const values = Object.values(votingData)
-    .map(d => d[selectedParty])
+    .map(d => getPercentage(d, selectedParty))
     .filter(v => typeof v === 'number');
   const max = values.length > 0 ? Math.max(...values) : 0;
-  document.getElementById('legend-min').textContent = `0 ${label}`;
-  document.getElementById('legend-max').textContent = `${max} ${label}`;
+  document.getElementById('legend-min').textContent = '0%';
+  document.getElementById('legend-max').textContent = `${max}%`;
 }
 
 // ── Dataset select ──────────────────────────────────────────────────────────
