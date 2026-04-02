@@ -65,7 +65,9 @@ const NEIGHBORHOOD_NAMES = {
 
 let map;
 let geojsonLayer;
-let votingData         = {};   // { postcode: { party: value, … } }
+let circleLayer;
+let geojsonData        = null;  // cached raw GeoJSON for re-use after dataset switch
+let votingData         = {};    // { key: { party: value, … } }
 let selectedParty      = null;
 let selectedDatasetIdx = 0;
 
@@ -74,6 +76,7 @@ let selectedDatasetIdx = 0;
 function currentDataset()    { return datasets[selectedDatasetIdx]; }
 function currentPartyColors(){ return currentDataset().partyColors; }
 function currentValueLabel() { return currentDataset().valueLabel; }
+function isStembureau()      { return currentDataset().type === 'stembureau'; }
 
 // ── Map initialisation ──────────────────────────────────────────────────────
 
@@ -90,10 +93,11 @@ function initMap() {
 
 function loadDatasetData() {
   votingData = {};
-  currentDataset().data.forEach(row => {
-    if (row.postcode) {
-      votingData[String(row.postcode)] = row;
-    }
+  currentDataset().data.forEach((row, i) => {
+    // For stembureau datasets use index keys (multiple rows can share a postcode).
+    // For choropleth datasets always key by postcode.
+    const key = isStembureau() ? String(i) : String(row.postcode);
+    if (key !== 'undefined') votingData[key] = row;
   });
 }
 
@@ -170,6 +174,118 @@ function getColor(value, partyHex) {
 }
 
 // ── Value helpers (percentage primary, votes secondary) ────────────────────
+
+// ── Stembureau – circle radius ──────────────────────────────────────────────
+
+/** Radius (px) scaled by √(votes / maxVotes) between MIN and MAX. */
+function getCircleRadius(votes, maxVotes) {
+  const MIN_R = 6, MAX_R = 28;
+  if (!votes || !maxVotes) return MIN_R;
+  return Math.round(MIN_R + (MAX_R - MIN_R) * Math.sqrt(votes / maxVotes));
+}
+
+// ── Stembureau – tooltip / sidebar ─────────────────────────────────────────
+
+function buildStembureauTooltip(row) {
+  let html = `<strong>${row.naam}</strong> <span style="opacity:.7">(${row.postcode})</span>`;
+  html += `<br>Totaal: ${row.totaal_stemmen.toLocaleString('nl')} stemmen`;
+  if (selectedParty && row[selectedParty] !== undefined) {
+    const pct = getPercentage(row, selectedParty);
+    html += `<br>${selectedParty}: <strong>${pct}%</strong>`
+          + ` <span style="opacity:.7">(${row[selectedParty]} stemmen)</span>`;
+  }
+  return html;
+}
+
+function showStembureauInfoBox(row) {
+  const box         = document.getElementById('info-box');
+  const partyColors = currentPartyColors();
+
+  let html = `<h3>${row.naam}</h3>`;
+  html += `<p class="hint" style="margin-bottom:8px">${row.postcode} &nbsp;·&nbsp; `
+        + `Totaal: <strong style="color:#e8edf2">${row.totaal_stemmen.toLocaleString('nl')}</strong> stemmen</p>`;
+
+  if (selectedParty && row[selectedParty] !== undefined) {
+    const col   = partyColors[selectedParty] ?? '#888888';
+    const pct   = getPercentage(row, selectedParty);
+    html += `<div class="party-highlight">
+      <span class="color-dot" style="background:${col}"></span>
+      ${selectedParty}: ${pct}% (${row[selectedParty]} stemmen)
+    </div>`;
+  }
+
+  html += '<table>';
+  for (const [party, col] of Object.entries(partyColors)) {
+    if (row[party] === undefined) continue;
+    const pct = getPercentage(row, party);
+    const sel = party === selectedParty ? ' class="selected-party"' : '';
+    html += `<tr${sel}>
+      <td><span class="color-dot" style="background:${col}"></span></td>
+      <td>${party}</td>
+      <td>${pct}%</td>
+      <td class="votes-cell">(${row[party]})</td>
+    </tr>`;
+  }
+  html += '</table>';
+
+  box.innerHTML = html;
+}
+
+// ── Stembureau – circle layer ───────────────────────────────────────────────
+
+function renderStembureauLayer() {
+  if (circleLayer) { map.removeLayer(circleLayer); circleLayer = null; }
+
+  const ds = currentDataset();
+  if (!ds.data || !ds.data.length) return;
+
+  const maxVotes    = Math.max(...ds.data.map(d => d.totaal_stemmen || 0));
+  const partyColors = currentPartyColors();
+
+  circleLayer = L.featureGroup();
+
+  ds.data.forEach(row => {
+    if (row.lat == null || row.lng == null) return;
+
+    const radius = getCircleRadius(row.totaal_stemmen, maxVotes);
+    let fillColor;
+    if (selectedParty) {
+      const col = partyColors[selectedParty] ?? '#888888';
+      fillColor = getColor(getPercentage(row, selectedParty), col);
+    } else {
+      fillColor = '#607d8b';
+    }
+
+    const circle = L.circleMarker([row.lat, row.lng], {
+      radius,
+      fillColor,
+      fillOpacity: 0.85,
+      color: '#ffffff',
+      weight: 1.5,
+    });
+
+    circle.bindTooltip(buildStembureauTooltip(row), { sticky: true, direction: 'top', offset: [0, -radius] });
+
+    circle.on({
+      mouseover(e) {
+        e.target.setStyle({ weight: 3, color: '#f0f0f0' });
+        e.target.bringToFront();
+        showStembureauInfoBox(row);
+      },
+      mouseout(e) {
+        e.target.setStyle({ weight: 1.5, color: '#ffffff' });
+        resetInfoBox();
+      },
+      click() {
+        map.setView([row.lat, row.lng], 15);
+      },
+    });
+
+    circleLayer.addLayer(circle);
+  });
+
+  circleLayer.addTo(map);
+}
 
 /** Return the percentage for a party in a data row, regardless of dataset type. */
 function getPercentage(data, party) {
@@ -302,15 +418,23 @@ function showInfoBox(postcode) {
 }
 
 function resetInfoBox() {
-  const box = document.getElementById('info-box');
+  const box  = document.getElementById('info-box');
+  const area = isStembureau() ? 'stembureau' : 'postcodegebied';
   box.innerHTML = selectedParty
-    ? '<p class="hint">Beweeg over een postcodegebied voor details.</p>'
-    : '<p class="hint">Selecteer een partij en beweeg over een postcodegebied voor details.</p>';
+    ? `<p class="hint">Beweeg over een ${area} voor details.</p>`
+    : `<p class="hint">Selecteer een partij en beweeg over een ${area} voor details.</p>`;
 }
 
 // ── Map update ──────────────────────────────────────────────────────────────
 
 function updateMapColors() {
+  if (isStembureau()) {
+    renderStembureauLayer();
+    updateLegend();
+    resetInfoBox();
+    return;
+  }
+
   if (!geojsonLayer) return;
 
   geojsonLayer.setStyle(styleFeature);
@@ -370,7 +494,24 @@ function populateDatasetSelect() {
     partySelect.innerHTML = '<option value="">— selecteer een partij —</option>';
     populatePartySelect();
 
-    updateMapColors();
+    if (isStembureau()) {
+      // Hide choropleth layer; render circles instead
+      if (geojsonLayer) map.removeLayer(geojsonLayer);
+      renderStembureauLayer();
+      updateLegend();
+      resetInfoBox();
+      const bounds = circleLayer ? circleLayer.getBounds() : null;
+      if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+    } else {
+      // Remove circles; restore or recreate choropleth layer
+      if (circleLayer) { map.removeLayer(circleLayer); circleLayer = null; }
+      if (geojsonLayer) {
+        geojsonLayer.addTo(map);
+      } else if (geojsonData) {
+        geojsonLayer = L.geoJSON(geojsonData, { style: styleFeature, onEachFeature }).addTo(map);
+      }
+      updateMapColors();
+    }
   });
 }
 
@@ -401,8 +542,19 @@ async function init() {
     updateMapColors();
   });
 
+  if (isStembureau()) {
+    // Initial dataset is stembureau type – render circles immediately, skip GeoJSON load
+    renderStembureauLayer();
+    updateLegend();
+    const bounds = circleLayer ? circleLayer.getBounds() : null;
+    if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
+    document.getElementById('loading-msg').hidden = true;
+    return;
+  }
+
   try {
     const geojson = await fetchGeoJSON();
+    geojsonData   = geojson;  // cache for re-use when switching back from stembureau
 
     geojsonLayer = L.geoJSON(geojson, {
       style:          styleFeature,
