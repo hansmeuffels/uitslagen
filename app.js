@@ -101,41 +101,24 @@ function loadDatasetData() {
   });
 }
 
-// ── PDOK WFS GeoJSON fetching ───────────────────────────────────────────────
+// ── Local GeoJSON fetching ──────────────────────────────────────────────────
 
 async function fetchGeoJSON() {
-  // 1. Try the PDOK CBS WFS service (accurate real-world boundaries).
+  // 1. Bundled PC4 polygon boundaries (pc4_tilburg_shapes.geojson).
   try {
-    const pcList = TILBURG_POSTCODES.map(p => `'${p}'`).join(',');
-    const url = new URL('https://service.pdok.nl/cbs/gebiedsindelingen/2022/wfs/v1_0');
-    url.searchParams.set('SERVICE',      'WFS');
-    url.searchParams.set('VERSION',      '2.0.0');
-    url.searchParams.set('REQUEST',      'GetFeature');
-    url.searchParams.set('TYPENAMES',    'postcode4gebied');
-    url.searchParams.set('outputFormat', 'application/json');
-    url.searchParams.set('srsName',      'EPSG:4326');
-    url.searchParams.set('CQL_FILTER',   `postcode4naam IN (${pcList})`);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    try {
-      const response = await fetch(url.toString(), { signal: controller.signal });
-      clearTimeout(timer);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.features && data.features.length > 0) return data;
-      }
-    } finally {
-      clearTimeout(timer);
+    const shapes = await fetch('data/pc4_tilburg_shapes.geojson');
+    if (shapes.ok) {
+      const data = await shapes.json();
+      if (data.features && data.features.length > 0) return data;
     }
   } catch (_) {
-    // PDOK unreachable – fall through to the bundled fallback
+    // shapes file unavailable – fall through to centroid fallback
   }
 
-  // 2. Bundled real PC4 boundaries (sourced from georef-netherlands-postcode-pc4).
+  // 2. Centroid-point fallback (pc4_tilburg_centered.geojson).
   const fallback = await fetch('data/pc4_tilburg_centered.geojson');
   if (!fallback.ok) {
-    throw new Error('Kon geen postcodegebieden laden (PDOK niet bereikbaar en fallback ontbreekt).');
+    throw new Error('Kon geen postcodegebieden laden (beide lokale bestanden ontbreken).');
   }
   return fallback.json();
 }
