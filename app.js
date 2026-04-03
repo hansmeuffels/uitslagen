@@ -7,19 +7,7 @@ import { datasets } from './data/datasets.js';
 const TILBURG_CENTER = [51.5655, 5.0913];
 const TILBURG_ZOOM   = 12;
 
-/**
- * PC4 postal codes that belong to the municipality of Tilburg (incl. Udenhout,
- * Berkel-Enschot, Biezenmortel).  Used to filter the PDOK WFS response.
- */
-const TILBURG_POSTCODES = [
-  '5011','5012','5013','5014','5015','5016','5017','5018','5019',
-  '5021','5022','5023','5024','5025','5026','5027','5028',
-  '5031','5032','5033','5034','5035','5036','5037','5038',
-  '5041','5042','5043','5044','5045','5046','5047','5048','5049',
-  '5056','5057','5071','5074',
-];
-
-/** Human-readable neighbourhood names per PC4 (fallback for TK2023 dataset). */
+/** Human-readable neighbourhood names per PC4 (fallback when data has no wijk). */
 const NEIGHBORHOOD_NAMES = {
   '5011': 'Centrum',
   '5012': 'Binnenstad Oost',
@@ -65,8 +53,8 @@ const NEIGHBORHOOD_NAMES = {
 
 let map;
 let geojsonLayer;
-let circleLayer;
-let geojsonData        = null;  // cached raw GeoJSON for re-use after dataset switch
+let geojsonData        = null;  // GeoJSON for the current dataset
+let geojsonCache       = {};    // cache by geojsonFile path
 let votingData         = {};    // { key: { party: value, … } }
 let selectedParty      = null;
 let selectedDatasetIdx = 0;
@@ -76,7 +64,17 @@ let selectedDatasetIdx = 0;
 function currentDataset()    { return datasets[selectedDatasetIdx]; }
 function currentPartyColors(){ return currentDataset().partyColors; }
 function currentValueLabel() { return currentDataset().valueLabel; }
-function isStembureau()      { return currentDataset().type === 'stembureau'; }
+
+/**
+ * True when the loaded GeoJSON uses Point geometry (circle rendering).
+ * All three bundled GeoJSON files use a single geometry type throughout,
+ * so checking the first feature is sufficient.
+ */
+function isCircleDataset() {
+  return geojsonData
+    && geojsonData.features.length > 0
+    && geojsonData.features[0].geometry.type === 'Point';
+}
 
 // ── Map initialisation ──────────────────────────────────────────────────────
 
@@ -93,34 +91,23 @@ function initMap() {
 
 function loadDatasetData() {
   votingData = {};
-  currentDataset().data.forEach((row, i) => {
-    // For stembureau datasets use index keys (multiple rows can share a postcode).
-    // For choropleth datasets always key by postcode.
-    const key = isStembureau() ? String(i) : String(row.postcode);
-    if (key !== 'undefined') votingData[key] = row;
+  currentDataset().data.forEach(row => {
+    const key = String(row.postcode);
+    if (key && key !== 'undefined') votingData[key] = row;
   });
 }
 
-// ── Local GeoJSON fetching ──────────────────────────────────────────────────
+// ── GeoJSON fetching (with per-file cache) ──────────────────────────────────
 
 async function fetchGeoJSON() {
-  // 1. Bundled PC4 polygon boundaries (pc4_tilburg_shapes.geojson).
-  try {
-    const shapes = await fetch('data/pc4_tilburg_shapes.geojson');
-    if (shapes.ok) {
-      const data = await shapes.json();
-      if (data.features && data.features.length > 0) return data;
-    }
-  } catch (_) {
-    // shapes file unavailable – fall through to centroid fallback
-  }
+  const file = currentDataset().geojsonFile;
+  if (geojsonCache[file]) return geojsonCache[file];
 
-  // 2. Centroid-point fallback (pc4_tilburg_centered.geojson).
-  const fallback = await fetch('data/pc4_tilburg_centered.geojson');
-  if (!fallback.ok) {
-    throw new Error('Kon geen postcodegebieden laden (beide lokale bestanden ontbreken).');
-  }
-  return fallback.json();
+  const res = await fetch(file);
+  if (!res.ok) throw new Error(`Kon ${file} niet laden (${res.status})`);
+  const data = await res.json();
+  geojsonCache[file] = data;
+  return data;
 }
 
 // ── Colour helpers ──────────────────────────────────────────────────────────
@@ -137,7 +124,7 @@ function rgbToHex(r, g, b) {
   return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
 }
 
-/** Blend white → partyColor proportionally to percentage / maxPercentage. */
+/** Blend white → partyColor proportionally to value / maxValue. */
 function getColor(value, partyHex) {
   if (value === null || value === undefined) return '#cccccc';
 
@@ -156,9 +143,7 @@ function getColor(value, partyHex) {
   );
 }
 
-// ── Value helpers (percentage primary, votes secondary) ────────────────────
-
-// ── Stembureau – circle radius ──────────────────────────────────────────────
+// ── Circle radius ───────────────────────────────────────────────────────────
 
 /** Radius (px) scaled by √(votes / maxVotes) between MIN and MAX. */
 function getCircleRadius(votes, maxVotes) {
@@ -167,110 +152,9 @@ function getCircleRadius(votes, maxVotes) {
   return Math.round(MIN_R + (MAX_R - MIN_R) * Math.sqrt(votes / maxVotes));
 }
 
-// ── Stembureau – tooltip / sidebar ─────────────────────────────────────────
+// ── Value helpers ────────────────────────────────────────────────────────────
 
-function buildStembureauTooltip(row) {
-  let html = `<strong>${row.naam}</strong> <span style="opacity:.7">(${row.postcode})</span>`;
-  html += `<br>Totaal: ${row.totaal_stemmen.toLocaleString('nl')} stemmen`;
-  if (selectedParty && row[selectedParty] !== undefined) {
-    const pct = getPercentage(row, selectedParty);
-    html += `<br>${selectedParty}: <strong>${pct}%</strong>`
-          + ` <span style="opacity:.7">(${row[selectedParty]} stemmen)</span>`;
-  }
-  return html;
-}
-
-function showStembureauInfoBox(row) {
-  const box         = document.getElementById('info-box');
-  const partyColors = currentPartyColors();
-
-  let html = `<h3>${row.naam}</h3>`;
-  html += `<p class="hint" style="margin-bottom:8px">${row.postcode} &nbsp;·&nbsp; `
-        + `Totaal: <strong style="color:#e8edf2">${row.totaal_stemmen.toLocaleString('nl')}</strong> stemmen</p>`;
-
-  if (selectedParty && row[selectedParty] !== undefined) {
-    const col   = partyColors[selectedParty] ?? '#888888';
-    const pct   = getPercentage(row, selectedParty);
-    html += `<div class="party-highlight">
-      <span class="color-dot" style="background:${col}"></span>
-      ${selectedParty}: ${pct}% (${row[selectedParty]} stemmen)
-    </div>`;
-  }
-
-  html += '<table>';
-  for (const [party, col] of Object.entries(partyColors)) {
-    if (row[party] === undefined) continue;
-    const pct = getPercentage(row, party);
-    const sel = party === selectedParty ? ' class="selected-party"' : '';
-    html += `<tr${sel}>
-      <td><span class="color-dot" style="background:${col}"></span></td>
-      <td>${party}</td>
-      <td>${pct}%</td>
-      <td class="votes-cell">(${row[party]})</td>
-    </tr>`;
-  }
-  html += '</table>';
-
-  box.innerHTML = html;
-}
-
-// ── Stembureau – circle layer ───────────────────────────────────────────────
-
-function renderStembureauLayer() {
-  if (circleLayer) { map.removeLayer(circleLayer); circleLayer = null; }
-
-  const ds = currentDataset();
-  if (!ds.data || !ds.data.length) return;
-
-  const maxVotes    = Math.max(...ds.data.map(d => d.totaal_stemmen || 0));
-  const partyColors = currentPartyColors();
-
-  circleLayer = L.featureGroup();
-
-  ds.data.forEach(row => {
-    if (row.lat == null || row.lng == null) return;
-
-    const radius = getCircleRadius(row.totaal_stemmen, maxVotes);
-    let fillColor;
-    if (selectedParty) {
-      const col = partyColors[selectedParty] ?? '#888888';
-      fillColor = getColor(getPercentage(row, selectedParty), col);
-    } else {
-      fillColor = '#607d8b';
-    }
-
-    const circle = L.circleMarker([row.lat, row.lng], {
-      radius,
-      fillColor,
-      fillOpacity: 0.85,
-      color: '#ffffff',
-      weight: 1.5,
-    });
-
-    circle.bindTooltip(buildStembureauTooltip(row), { sticky: true, direction: 'top', offset: [0, -radius] });
-
-    circle.on({
-      mouseover(e) {
-        e.target.setStyle({ weight: 3, color: '#f0f0f0' });
-        e.target.bringToFront();
-        showStembureauInfoBox(row);
-      },
-      mouseout(e) {
-        e.target.setStyle({ weight: 1.5, color: '#ffffff' });
-        resetInfoBox();
-      },
-      click() {
-        map.setView([row.lat, row.lng], 15);
-      },
-    });
-
-    circleLayer.addLayer(circle);
-  });
-
-  circleLayer.addTo(map);
-}
-
-/** Return the percentage for a party in a data row, regardless of dataset type. */
+/** Return the percentage for a party in a data row. */
 function getPercentage(data, party) {
   if (!data || data[party] === undefined) return null;
   if (currentValueLabel() === '%') return data[party];
@@ -290,26 +174,37 @@ function getVoteCount(data, party) {
 
 // ── Feature helpers ─────────────────────────────────────────────────────────
 
-function getPostcode(feature) {
-  const p = feature.properties;
-  return String(p.postcode4naam ?? p.pc4 ?? p.PC4 ?? p.postcode ?? '');
+/**
+ * Extract the voting-data lookup key from a GeoJSON feature.
+ * For keyType 'pc4': uses postcode4naam or Postcode property (4 digits).
+ * For keyType 'pc6': concatenates Postcode + WijkLetters (e.g. "5035BR").
+ */
+function getPostcodeKey(feature) {
+  const ds = currentDataset();
+  const p  = feature.properties;
+  if (ds.keyType === 'pc6') {
+    return String(p.Postcode ?? '') + String(p.WijkLetters ?? '');
+  }
+  return String(p.postcode4naam ?? p.Postcode ?? '');
 }
 
-function getNeighborhood(postcode) {
-  return (votingData[postcode] && votingData[postcode].wijk)
-    ? votingData[postcode].wijk
-    : (NEIGHBORHOOD_NAMES[postcode] ?? '');
+/** Return a display label for a data key (neighbourhood or stembureau name). */
+function getLabel(key) {
+  const row = votingData[key];
+  if (row && row.naam) return row.naam;   // PC6: stembureau name
+  if (row && row.wijk) return row.wijk;   // explicit neighbourhood name
+  return NEIGHBORHOOD_NAMES[key] ?? '';   // PC4 fallback
 }
 
-// ── Leaflet style / interaction ─────────────────────────────────────────────
+// ── Choropleth (polygon) style ───────────────────────────────────────────────
 
 function styleFeature(feature) {
   if (!selectedParty) {
     return { fillColor: '#b0bec5', weight: 1, color: '#607d8b', fillOpacity: 0.4 };
   }
 
-  const pc          = getPostcode(feature);
-  const data        = votingData[pc];
+  const key         = getPostcodeKey(feature);
+  const data        = votingData[key];
   const val         = data ? getPercentage(data, selectedParty) : null;
   const partyColors = currentPartyColors();
   const col         = partyColors[selectedParty] ?? '#888888';
@@ -322,10 +217,12 @@ function styleFeature(feature) {
   };
 }
 
-function buildTooltip(postcode) {
-  const data  = votingData[postcode];
-  const hood  = getNeighborhood(postcode);
-  let html = `<strong>${postcode}</strong>${hood ? ` – ${hood}` : ''}`;
+// ── Tooltip / sidebar ────────────────────────────────────────────────────────
+
+function buildTooltip(key) {
+  const data  = votingData[key];
+  const label = getLabel(key);
+  let html = `<strong>${key}</strong>${label ? ` – ${label}` : ''}`;
   if (data && selectedParty && data[selectedParty] !== undefined) {
     const pct   = getPercentage(data, selectedParty);
     const votes = getVoteCount(data, selectedParty);
@@ -335,42 +232,21 @@ function buildTooltip(postcode) {
   return html;
 }
 
-function onEachFeature(feature, layer) {
-  const pc = getPostcode(feature);
-
-  layer.bindTooltip(buildTooltip(pc), { sticky: true, direction: 'top', offset: [0, -6] });
-
-  layer.on({
-    mouseover(e) {
-      e.target.setStyle({ weight: 3, color: '#ffffff' });
-      e.target.bringToFront();
-      showInfoBox(pc);
-    },
-    mouseout(e) {
-      geojsonLayer.resetStyle(e.target);
-      resetInfoBox();
-    },
-    click(e) {
-      map.fitBounds(e.target.getBounds(), { padding: [30, 30] });
-    },
-  });
-}
-
-// ── Sidebar content ─────────────────────────────────────────────────────────
-
-function showInfoBox(postcode) {
+function showInfoBox(key) {
   const box         = document.getElementById('info-box');
-  const data        = votingData[postcode];
-  const hood        = getNeighborhood(postcode);
+  const data        = votingData[key];
+  const label       = getLabel(key);
   const partyColors = currentPartyColors();
 
-  let html = `<h3>${postcode}${hood ? ` – ${hood}` : ''}</h3>`;
+  let html = `<h3>${key}${label ? ` – ${label}` : ''}</h3>`;
 
   if (!data) {
     html += '<p class="hint">Geen kiesdata beschikbaar voor dit gebied.</p>';
     box.innerHTML = html;
     return;
   }
+
+  html += `<p class="hint" style="margin-bottom:8px">Totaal: <strong style="color:#e8edf2">${data.totaal_stemmen.toLocaleString('nl')}</strong> stemmen</p>`;
 
   if (selectedParty && data[selectedParty] !== undefined) {
     const col   = partyColors[selectedParty] ?? '#888888';
@@ -387,7 +263,7 @@ function showInfoBox(postcode) {
     if (data[party] === undefined) continue;
     const pct   = getPercentage(data, party);
     const votes = getVoteCount(data, party);
-    const sel = party === selectedParty ? ' class="selected-party"' : '';
+    const sel   = party === selectedParty ? ' class="selected-party"' : '';
     html += `<tr${sel}>
       <td><span class="color-dot" style="background:${col}"></span></td>
       <td>${party}</td>
@@ -402,32 +278,133 @@ function showInfoBox(postcode) {
 
 function resetInfoBox() {
   const box  = document.getElementById('info-box');
-  const area = isStembureau() ? 'stembureau' : 'postcodegebied';
+  const area = currentDataset().keyType === 'pc6' ? 'stembureau' : 'postcodegebied';
   box.innerHTML = selectedParty
     ? `<p class="hint">Beweeg over een ${area} voor details.</p>`
     : `<p class="hint">Selecteer een partij en beweeg over een ${area} voor details.</p>`;
 }
 
-// ── Map update ──────────────────────────────────────────────────────────────
+// ── Feature interaction ──────────────────────────────────────────────────────
+
+function onEachFeature(feature, layer) {
+  const key     = getPostcodeKey(feature);
+  const isPoint = feature.geometry.type === 'Point';
+  const radius  = isPoint && layer.getRadius ? layer.getRadius() : 6;
+
+  layer.bindTooltip(buildTooltip(key), {
+    sticky:    true,
+    direction: 'top',
+    offset:    [0, isPoint ? -radius : -6],
+  });
+
+  layer.on({
+    mouseover(e) {
+      e.target.setStyle({ weight: 3, color: isPoint ? '#f0f0f0' : '#ffffff' });
+      e.target.bringToFront();
+      showInfoBox(key);
+    },
+    mouseout(e) {
+      if (isPoint) {
+        e.target.setStyle({ weight: 1.5, color: '#ffffff' });
+      } else {
+        geojsonLayer.resetStyle(e.target);
+      }
+      resetInfoBox();
+    },
+    click(e) {
+      if (isPoint) {
+        map.setView(e.target.getLatLng(), 15);
+      } else {
+        map.fitBounds(e.target.getBounds(), { padding: [30, 30] });
+      }
+    },
+  });
+}
+
+// ── Layer rendering ──────────────────────────────────────────────────────────
+
+function renderLayer() {
+  if (geojsonLayer) { map.removeLayer(geojsonLayer); geojsonLayer = null; }
+  if (!geojsonData)  return;
+
+  if (isCircleDataset()) {
+    // Circles (Point GeoJSON): only show features with matching vote data
+    const filteredData = {
+      ...geojsonData,
+      features: geojsonData.features.filter(f => votingData[getPostcodeKey(f)] !== undefined),
+    };
+
+    const maxVotes = Math.max(
+      ...Object.values(votingData).map(d => d.totaal_stemmen || 0), 1
+    );
+
+    geojsonLayer = L.geoJSON(filteredData, {
+      pointToLayer(feature, latlng) {
+        const key    = getPostcodeKey(feature);
+        const row    = votingData[key];
+        const radius = getCircleRadius(row ? row.totaal_stemmen : 0, maxVotes);
+
+        let fillColor;
+        if (selectedParty && row) {
+          const col = currentPartyColors()[selectedParty] ?? '#888888';
+          fillColor = getColor(getPercentage(row, selectedParty), col);
+        } else {
+          fillColor = '#607d8b';
+        }
+
+        return L.circleMarker(latlng, {
+          radius,
+          fillColor,
+          fillOpacity: 0.85,
+          color:       '#ffffff',
+          weight:      1.5,
+        });
+      },
+      onEachFeature,
+    }).addTo(map);
+
+  } else {
+    // Choropleth (Polygon GeoJSON)
+    geojsonLayer = L.geoJSON(geojsonData, {
+      style:         styleFeature,
+      onEachFeature,
+    }).addTo(map);
+  }
+}
+
+// ── Map update ───────────────────────────────────────────────────────────────
 
 function updateMapColors() {
-  if (isStembureau()) {
-    renderStembureauLayer();
-    updateLegend();
-    resetInfoBox();
-    return;
-  }
-
   if (!geojsonLayer) return;
 
-  geojsonLayer.setStyle(styleFeature);
+  if (isCircleDataset()) {
+    // Update each circle's fill colour without rebuilding the layer
+    const partyColors = currentPartyColors();
+    geojsonLayer.eachLayer(layer => {
+      if (!layer.feature) return;
+      const key = getPostcodeKey(layer.feature);
+      const row = votingData[key];
+      let fillColor;
+      if (selectedParty && row) {
+        const col = partyColors[selectedParty] ?? '#888888';
+        fillColor = getColor(getPercentage(row, selectedParty), col);
+      } else {
+        fillColor = '#607d8b';
+      }
+      layer.setStyle({ fillColor });
+      layer.setTooltipContent(buildTooltip(key));
+    });
 
-  geojsonLayer.eachLayer(layer => {
-    if (layer.feature) {
-      const pc = getPostcode(layer.feature);
-      layer.setTooltipContent(buildTooltip(pc));
-    }
-  });
+  } else {
+    geojsonLayer.setStyle(styleFeature);
+
+    geojsonLayer.eachLayer(layer => {
+      if (layer.feature) {
+        const key = getPostcodeKey(layer.feature);
+        layer.setTooltipContent(buildTooltip(key));
+      }
+    });
+  }
 
   updateLegend();
   resetInfoBox();
@@ -460,15 +437,15 @@ function populateDatasetSelect() {
   const select = document.getElementById('dataset-select');
 
   datasets.forEach((ds, i) => {
-    const opt = document.createElement('option');
+    const opt       = document.createElement('option');
     opt.value       = i;
     opt.textContent = ds.title;
     select.appendChild(opt);
   });
 
-  select.addEventListener('change', e => {
+  select.addEventListener('change', async e => {
     selectedDatasetIdx = Number(e.target.value);
-    selectedParty = null;
+    selectedParty      = null;
 
     loadDatasetData();
 
@@ -477,23 +454,21 @@ function populateDatasetSelect() {
     partySelect.innerHTML = '<option value="">— selecteer een partij —</option>';
     populatePartySelect();
 
-    if (isStembureau()) {
-      // Hide choropleth layer; render circles instead
-      if (geojsonLayer) map.removeLayer(geojsonLayer);
-      renderStembureauLayer();
-      updateLegend();
-      resetInfoBox();
-      const bounds = circleLayer ? circleLayer.getBounds() : null;
-      if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
-    } else {
-      // Remove circles; restore or recreate choropleth layer
-      if (circleLayer) { map.removeLayer(circleLayer); circleLayer = null; }
-      if (geojsonLayer) {
-        geojsonLayer.addTo(map);
-      } else if (geojsonData) {
-        geojsonLayer = L.geoJSON(geojsonData, { style: styleFeature, onEachFeature }).addTo(map);
-      }
-      updateMapColors();
+    // Load GeoJSON for the new dataset (uses cache when available)
+    try {
+      geojsonData = await fetchGeoJSON();
+    } catch (err) {
+      console.error('GeoJSON laadfoute bij wisselen dataset:', err);
+      geojsonData = null;
+    }
+
+    renderLayer();
+    updateLegend();
+    resetInfoBox();
+
+    if (geojsonLayer) {
+      const bounds = geojsonLayer.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
     }
   });
 }
@@ -505,7 +480,7 @@ function populatePartySelect() {
   const partyColors = currentPartyColors();
 
   for (const party of Object.keys(partyColors)) {
-    const opt = document.createElement('option');
+    const opt       = document.createElement('option');
     opt.value       = party;
     opt.textContent = party;
     select.appendChild(opt);
@@ -525,27 +500,14 @@ async function init() {
     updateMapColors();
   });
 
-  if (isStembureau()) {
-    // Initial dataset is stembureau type – render circles immediately, skip GeoJSON load
-    renderStembureauLayer();
-    updateLegend();
-    const bounds = circleLayer ? circleLayer.getBounds() : null;
-    if (bounds && bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
-    document.getElementById('loading-msg').hidden = true;
-    return;
-  }
-
   try {
-    const geojson = await fetchGeoJSON();
-    geojsonData   = geojson;  // cache for re-use when switching back from stembureau
+    geojsonData = await fetchGeoJSON();
 
-    geojsonLayer = L.geoJSON(geojson, {
-      style:          styleFeature,
-      onEachFeature,
-    }).addTo(map);
+    renderLayer();
 
-    if (geojsonLayer.getLayers().length > 0) {
-      map.fitBounds(geojsonLayer.getBounds(), { padding: [20, 20] });
+    if (geojsonLayer) {
+      const bounds = geojsonLayer.getBounds();
+      if (bounds.isValid()) map.fitBounds(bounds, { padding: [20, 20] });
     }
 
     document.getElementById('loading-msg').hidden = true;
