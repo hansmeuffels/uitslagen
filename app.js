@@ -65,7 +65,11 @@ function currentDataset()    { return datasets[selectedDatasetIdx]; }
 function currentPartyColors(){ return currentDataset().partyColors; }
 function currentValueLabel() { return currentDataset().valueLabel; }
 
-/** True when the loaded GeoJSON uses Point geometry (circle rendering). */
+/**
+ * True when the loaded GeoJSON uses Point geometry (circle rendering).
+ * All three bundled GeoJSON files use a single geometry type throughout,
+ * so checking the first feature is sufficient.
+ */
 function isCircleDataset() {
   return geojsonData
     && geojsonData.features.length > 0

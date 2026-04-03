@@ -74,16 +74,20 @@ function splitRow(line) {
 const raw   = fs.readFileSync(CSV_PATH, 'utf8').replace(/^\uFEFF/, '').replace(/\r/g, '');
 const lines = raw.split('\n').filter(l => l.trim() !== '').map(splitRow);
 
-if (lines.length < 28) {
-  throw new Error(`CSV heeft te weinig regels: ${lines.length} (verwacht ≥ 28)`);
+if (lines.length < MIN_EXPECTED_ROWS) {
+  throw new Error(`CSV heeft te weinig regels: ${lines.length} (verwacht ≥ ${MIN_EXPECTED_ROWS})`);
 }
 
-// Row indices (0-based)
+// Row indices (0-based) within the CSV.
+// The file contains: 1 header row + 2 metadata rows (Gebiednummer, Postcode)
+// + 10 counting rows (opgeroepenen … minder stembiljetten) + 15 party rows = 28 rows total.
 const ROW_HEADER      = 0;   // stembureau names
 const ROW_POSTCODE    = 2;   // PC6 postcodes  (e.g. "5035 BR")
 const ROW_GELDIG      = 7;   // geldige stembiljetten
 const ROW_PARTIES_START = 13; // first party total row
 const ROW_PARTIES_END   = 27; // last  party total row (15 parties total)
+
+const MIN_EXPECTED_ROWS = 28; // minimum: 3 header/meta + 10 counting + 15 party rows
 
 // Data columns start at index 5 (index 4 = grand total, 0-3 = metadata)
 const DATA_COL_START = 5;
@@ -195,7 +199,9 @@ function jsString(s) {
 function serializeRow(row) {
   const parts = [];
   for (const [k, v] of Object.entries(row)) {
-    const key   = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(k) ? k : jsString(k);
+    // Use quoted JS string for keys that are not valid bare identifiers
+  const BARE_IDENTIFIER = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+  const key   = BARE_IDENTIFIER.test(k) ? k : jsString(k);
     const value = typeof v === 'string' ? jsString(v) : v;
     parts.push(`${key}: ${value}`);
   }
