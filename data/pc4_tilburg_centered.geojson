@@ -1,0 +1,486 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.08607557,
+          51.58522033
+        ]
+      },
+      "properties": {
+        "Postcode": "5011"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.09989385,
+          51.58406901
+        ]
+      },
+      "properties": {
+        "Postcode": "5012"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.09862646,
+          51.56939624
+        ]
+      },
+      "properties": {
+        "Postcode": "5013"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.09306894,
+          51.5670411
+        ]
+      },
+      "properties": {
+        "Postcode": "5014"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.11179853,
+          51.56946978
+        ]
+      },
+      "properties": {
+        "Postcode": "5015"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.09789038,
+          51.55508726
+        ]
+      },
+      "properties": {
+        "Postcode": "5017"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.10922686,
+          51.55651734
+        ]
+      },
+      "properties": {
+        "Postcode": "5018"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.08904194,
+          51.54823235
+        ]
+      },
+      "properties": {
+        "Postcode": "5021"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.09343481,
+          51.54121745
+        ]
+      },
+      "properties": {
+        "Postcode": "5022"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.06887136,
+          51.54911841
+        ]
+      },
+      "properties": {
+        "Postcode": "5025"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.06709053,
+          51.54039411
+        ]
+      },
+      "properties": {
+        "Postcode": "5026"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.03888853,
+          51.5470245
+        ]
+      },
+      "properties": {
+        "Postcode": "5032"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.97948564,
+          51.58355036
+        ]
+      },
+      "properties": {
+        "Postcode": "5035"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.99009351,
+          51.57075634
+        ]
+      },
+      "properties": {
+        "Postcode": "5036"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.05468673,
+          51.55850348
+        ]
+      },
+      "properties": {
+        "Postcode": "5037"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.07958584,
+          51.55726222
+        ]
+      },
+      "properties": {
+        "Postcode": "5038"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.07884515,
+          51.56449351
+        ]
+      },
+      "properties": {
+        "Postcode": "5041"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.05442443,
+          51.57120733
+        ]
+      },
+      "properties": {
+        "Postcode": "5042"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.01485839,
+          51.5806944
+        ]
+      },
+      "properties": {
+        "Postcode": "5043"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.03748147,
+          51.57601259
+        ]
+      },
+      "properties": {
+        "Postcode": "5044"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          4.99459753,
+          51.58508832
+        ]
+      },
+      "properties": {
+        "Postcode": "5045"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.07618102,
+          51.57251748
+        ]
+      },
+      "properties": {
+        "Postcode": "5046"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.0224872,
+          51.5911515
+        ]
+      },
+      "properties": {
+        "Postcode": "5047"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.05142492,
+          51.58722393
+        ]
+      },
+      "properties": {
+        "Postcode": "5048"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.07524865,
+          51.58911042
+        ]
+      },
+      "properties": {
+        "Postcode": "5049"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.06398733,
+          51.52189834
+        ]
+      },
+      "properties": {
+        "Postcode": "5051"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.04915522,
+          51.52700838
+        ]
+      },
+      "properties": {
+        "Postcode": "5052"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.07892003,
+          51.53210727
+        ]
+      },
+      "properties": {
+        "Postcode": "5053"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.1359328,
+          51.52844152
+        ]
+      },
+      "properties": {
+        "Postcode": "5056"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.1363916,
+          51.58787817
+        ]
+      },
+      "properties": {
+        "Postcode": "5057"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.15619767,
+          51.57372358
+        ]
+      },
+      "properties": {
+        "Postcode": "5059"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.18740395,
+          51.58064524
+        ]
+      },
+      "properties": {
+        "Postcode": "5061"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.20805633,
+          51.5708978
+        ]
+      },
+      "properties": {
+        "Postcode": "5062"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.1709977,
+          51.58091743
+        ]
+      },
+      "properties": {
+        "Postcode": "5063"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.17278628,
+          51.4432208
+        ]
+      },
+      "properties": {
+        "Postcode": "5066"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.1435886,
+          51.61077847
+        ]
+      },
+      "properties": {
+        "Postcode": "5071"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          5.18068011,
+          51.62199469
+        ]
+      },
+      "properties": {
+        "Postcode": "5074"
+      }
+    }
+  ]
+}
