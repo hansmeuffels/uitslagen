@@ -133,7 +133,7 @@ async function fetchGeoJSON() {
   }
 
   // 2. Bundled real PC4 boundaries (sourced from georef-netherlands-postcode-pc4).
-  const fallback = await fetch('data/tilburg_pc4_fallback.geojson');
+  const fallback = await fetch('data/pc4_tilburg_centered.geojson');
   if (!fallback.ok) {
     throw new Error('Kon geen postcodegebieden laden (PDOK niet bereikbaar en fallback ontbreekt).');
   }
